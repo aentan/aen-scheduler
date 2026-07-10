@@ -1,0 +1,176 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  googleId          String    @unique
+  email             String    @unique
+  name              String
+  picture           String?
+  slug              String    @unique
+  customDomain      String?   @unique
+  timezone          String    @default("UTC")
+  primaryCalendarId String?
+  notifyOnBooking   Boolean   @default(true)
+  sendReminders     Boolean   @default(false)
+  reminderHours     Int       @default(24)
+  theme             String    @default("system")
+  applyThemeToAdmin Boolean   @default(true)
+  applyThemeToBooking Boolean @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  googleAccounts     GoogleAccount[]
+  connectedCalendars ConnectedCalendar[]
+  slotTypes          SlotType[]
+  workingHours       WorkingHours[]
+  breaks             Break[]
+  holidays           Holiday[]
+  bookings           Booking[]
+}
+
+model GoogleAccount {
+  id           String   @id @default(uuid())
+  userId       String
+  googleId     String
+  email        String
+  name         String
+  picture      String?
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  tokenExpiry  DateTime
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectedCalendars ConnectedCalendar[]
+
+  @@unique([userId, googleId])
+}
+
+model ConnectedCalendar {
+  id               String   @id @default(uuid())
+  userId           String
+  googleAccountId  String
+  googleCalendarId String
+  name             String
+  description      String?
+  accessLevel      String
+  isActive         Boolean  @default(true)
+  backgroundColor  String?
+  createdAt        DateTime @default(now())
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleAccount GoogleAccount @relation(fields: [googleAccountId], references: [id], onDelete: Cascade)
+  slotTypes     SlotType[]
+
+  @@unique([userId, googleCalendarId])
+}
+
+model SlotType {
+  id                String   @id @default(uuid())
+  userId            String
+  calendarId        String?
+  name              String
+  slug              String
+  duration          Int
+  description       String?
+  color             String   @default("#3B82F6")
+  maxBookingsPerDay Int      @default(5)
+  bufferBefore      Int      @default(0)
+  bufferAfter       Int      @default(0)
+  workingHoursStart String?
+  workingHoursEnd   String?
+  minAdvanceHours   Int      @default(1)
+  maxAdvanceDays    Int      @default(30)
+  isActive          Boolean  @default(true)
+  oldSlugs          String[] @default([])
+  meetingLinkType   String   @default("none")
+  customMeetingLink String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendar ConnectedCalendar? @relation(fields: [calendarId], references: [id])
+  bookings Booking[]
+
+  @@unique([userId, slug])
+}
+
+model WorkingHours {
+  id        String  @id @default(uuid())
+  userId    String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  isEnabled Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dayOfWeek])
+}
+
+model Break {
+  id         String @id @default(uuid())
+  userId     String
+  name       String @default("Break")
+  startTime  String
+  endTime    String
+  daysOfWeek Int[]
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Holiday {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id               String    @id @default(uuid())
+  userId           String
+  slotTypeId       String
+  googleCalendarId String
+  googleEventId    String?
+  attendeeName     String
+  attendeeEmail    String
+  attendeePhone    String?
+  attendeeTimezone String
+  attendeeMessage  String?
+  startTime        DateTime
+  endTime          DateTime
+  meetingLink      String?
+  status           String    @default("booked")
+  cancelToken      String    @unique @default(uuid())
+  rescheduleToken  String    @unique @default(uuid())
+  createdAt        DateTime  @default(now())
+  cancelledAt      DateTime?
+  reminderSentAt   DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotType SlotType @relation(fields: [slotTypeId], references: [id])
+}
+
+model SlotLock {
+  id         String   @id @default(uuid())
+  userId     String
+  slotTypeId String
+  startTime  DateTime
+  expiresAt  DateTime
+
+  @@index([userId, startTime])
+  @@index([expiresAt])
+}

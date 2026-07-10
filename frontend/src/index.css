@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: 0 0 0;
+  --paper: 255 255 255;
+}
+
+.dark {
+  --ink: 255 255 255;
+  --paper: 0 0 0;
+}
+
+@layer utilities {
+  .text-emphasis-1 { color: rgb(var(--ink) / 100%); }
+  .text-emphasis-2 { color: rgb(var(--ink) / 61.8%); }
+  .text-emphasis-3 { color: rgb(var(--ink) / 38.2%); }
+  .text-emphasis-4 { color: rgb(var(--ink) / 23.6%); }
+  .font-kawingan { font-family: 'KawinganDEMO-Bold', 'avenue-mono-regular', monospace; }
+  .bg-paper { background-color: rgb(var(--paper)); }
+  .bg-ink { background-color: rgb(var(--ink)); }
+  .bg-ink-38 { background-color: rgb(var(--ink) / 38.2%); }
+  .text-ink { color: rgb(var(--ink)); }
+  .text-paper { color: rgb(var(--paper)); }
+  .border-ink { border-color: rgb(var(--ink)); }
+  .border-paper { border-color: rgb(var(--paper)); }
+  .text-paper-62 { color: rgb(var(--paper) / 61.8%); }
+}
+
+@keyframes eye-blink {
+  0%,    20%   { transform: translateX(0px);   }
+  20.1%, 30%   { transform: translateX(-24px); }
+  30.1%, 40%   { transform: translateX(-48px); }
+  40.1%, 50%   { transform: translateX(-72px); }
+  50.1%, 60%   { transform: translateX(-96px); }
+  60.1%, 70%   { transform: translateX(-72px); }
+  70.1%, 80%   { transform: translateX(-48px); }
+  80.1%, 90%   { transform: translateX(-24px); }
+  90.1%, 100%  { transform: translateX(0px);   }
+}
+
+@font-face {
+  font-family: 'avenue-mono-regular';
+  src: url('/fonts/avenue-mono-regular-webfont.woff2') format('woff2'),
+       url('/fonts/avenue-mono-regular-webfont.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'KawinganDEMO-Bold';
+  src: url('/fonts/KawinganDEMO-Bold.woff2') format('woff2'),
+       url('/fonts/KawinganDEMO-Bold.woff') format('woff');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  * {
+    font-family: 'avenue-mono-regular', 'Space Mono', 'Courier New', monospace;
+  }
+  body {
+    background: rgb(var(--paper));
+    color: rgb(var(--ink) / 72%);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    color: rgb(var(--ink));
+  }
+}
+
+.bg-graph-paper {
+  background-color: rgb(var(--paper));
+  background-image:
+    linear-gradient(rgb(var(--ink) / .4) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--ink) / .4) 1px, transparent 1px),
+    linear-gradient(rgb(var(--ink) / .2) .5px, transparent .5px),
+    linear-gradient(90deg, rgb(var(--ink) / .2) .5px, transparent .5px);
+  background-size: 192px 192px, 192px 192px, 48px 48px, 48px 48px;
+  background-position: -1px -1px, -1px -1px, -.5px -.5px, -.5px -.5px;
+}

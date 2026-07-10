@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment — secrets live here, never commit
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+backend/dist/
+frontend/dist/
+
+# Misc
+.DS_Store
+*.log
+coverage/
+
+# Local tool settings
+.claude/

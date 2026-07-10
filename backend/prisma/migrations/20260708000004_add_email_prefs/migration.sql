@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "notifyOnBooking" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN "sendReminders" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN "reminderHours" INTEGER NOT NULL DEFAULT 24;
+
+-- AlterTable
+ALTER TABLE "Booking" ADD COLUMN "reminderSentAt" TIMESTAMP(3);
