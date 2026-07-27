@@ -72,6 +72,21 @@ ${booking.meetingLink ? `<p><strong>Join:</strong> <a href="${booking.meetingLin
     await Promise.all(sends);
   }
 
+  async sendCalendarSyncFailure(booking: any, errorMessage: string) {
+    const organizerTime = this.formatTime(booking.startTime, booking.user.timezone);
+
+    await this.send(
+      booking.user.email,
+      `⚠️ Booking NOT added to your calendar: ${booking.slotType.name} with ${booking.attendeeName}`,
+      `<h2>⚠️ Calendar sync failed</h2>
+<p>A booking was created but the Google Calendar event could <strong>not</strong> be created. Add it to your calendar manually so you don't miss it.</p>
+<p><strong>When:</strong> ${organizerTime}</p>
+<p><strong>Who:</strong> ${booking.attendeeName} (<a href="mailto:${booking.attendeeEmail}">${booking.attendeeEmail}</a>)</p>
+<p><strong>Error:</strong> ${errorMessage}</p>
+<p>If this keeps happening, reconnect your Google account in Settings → Calendars.</p>`,
+    );
+  }
+
   async sendCancellationNotice(booking: any) {
     const dateStr = format(booking.startTime, 'MMMM d yyyy');
 

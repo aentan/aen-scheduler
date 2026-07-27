@@ -6,13 +6,36 @@ import { google } from 'googleapis';
 export class CalendarsService {
   constructor(private prisma: PrismaService) {}
 
-  private getOAuthClient(accessToken: string, refreshToken: string) {
+  private getOAuthClient(account: {
+    id: string;
+    accessToken: string;
+    refreshToken: string;
+    tokenExpiry: Date;
+  }) {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_CALLBACK_URL,
     );
-    oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+    oauth2Client.setCredentials({
+      access_token: account.accessToken,
+      refresh_token: account.refreshToken || undefined,
+      expiry_date: account.tokenExpiry?.getTime(),
+    });
+    // Persist refreshed tokens so we don't depend on the user re-logging in
+    oauth2Client.on('tokens', (tokens) => {
+      if (!tokens.access_token) return;
+      this.prisma.googleAccount
+        .update({
+          where: { id: account.id },
+          data: {
+            accessToken: tokens.access_token,
+            tokenExpiry: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
+            ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
+          },
+        })
+        .catch((err) => console.error('Failed to persist refreshed Google tokens:', err.message));
+    });
     return oauth2Client;
   }
 
@@ -22,7 +45,7 @@ export class CalendarsService {
       include: { googleAccount: true },
     });
     if (!cal?.googleAccount) throw new NotFoundException(`No account found for calendar ${googleCalendarId}`);
-    return this.getOAuthClient(cal.googleAccount.accessToken, cal.googleAccount.refreshToken);
+    return this.getOAuthClient(cal.googleAccount);
   }
 
   async syncCalendars(userId: string) {
@@ -42,9 +65,9 @@ export class CalendarsService {
 
   private async syncAccount(
     userId: string,
-    account: { id: string; accessToken: string; refreshToken: string },
+    account: { id: string; accessToken: string; refreshToken: string; tokenExpiry: Date },
   ) {
-    const auth = this.getOAuthClient(account.accessToken, account.refreshToken);
+    const auth = this.getOAuthClient(account);
     const calendar = google.calendar({ version: 'v3', auth });
 
     const response = await calendar.calendarList.list({ minAccessRole: 'writer' });
@@ -152,7 +175,7 @@ export class CalendarsService {
         const calIds = account.connectedCalendars.map((c) => c.googleCalendarId);
         if (calIds.length === 0) return;
 
-        const auth = this.getOAuthClient(account.accessToken, account.refreshToken);
+        const auth = this.getOAuthClient(account);
         const calendar = google.calendar({ version: 'v3', auth });
 
         try {

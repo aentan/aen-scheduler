@@ -66,6 +66,7 @@ export class BookingsService {
 
     let googleEventId: string | undefined;
     let meetingLink: string | undefined;
+    let calendarError: string | undefined;
 
     try {
       const gcalEvent = await this.calendarsService.createEvent(dto.userId, googleCalendarId, {
@@ -83,7 +84,8 @@ export class BookingsService {
         slotType.customMeetingLink ||
         undefined;
     } catch (err) {
-      console.error('Google Calendar event creation failed:', err.message);
+      calendarError = err.message;
+      console.error(`Google Calendar event creation failed for slot ${slotType.name} at ${startTime.toISOString()}:`, err);
     }
 
     const booking = await this.prisma.booking.create({
@@ -112,6 +114,12 @@ export class BookingsService {
     await this.emailService.sendBookingConfirmation(booking, { notifyOrganizer: booking.user.notifyOnBooking }).catch((err) =>
       console.error('Email send failed:', err.message),
     );
+
+    if (calendarError) {
+      await this.emailService.sendCalendarSyncFailure(booking, calendarError).catch((err) =>
+        console.error('Calendar sync failure alert email failed:', err.message),
+      );
+    }
 
     return booking;
   }
