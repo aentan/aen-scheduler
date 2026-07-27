@@ -24,7 +24,13 @@ async function bootstrap() {
     },
   }));
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: [
+      ...new Set(
+        [process.env.APP_URL, process.env.FRONTEND_URL || 'http://localhost:5173'].filter(
+          (u): u is string => !!u,
+        ),
+      ),
+    ],
     credentials: true,
   });
 

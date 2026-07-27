@@ -24,8 +24,10 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   async googleCallback(@Req() req: any, @Res() res: any) {
     const { access_token, user } = await this.authService.login(req.user);
-    const frontendUrl = this.config.get('FRONTEND_URL', 'http://localhost:5173');
-    res.redirect(`${frontendUrl}/auth/callback?token=${access_token}`);
+    // APP_URL is the admin origin; FRONTEND_URL may be a custom booking
+    // domain, which only serves public booking routes — never auth/admin.
+    const appUrl = this.config.get('APP_URL') || this.config.get('FRONTEND_URL', 'http://localhost:5173');
+    res.redirect(`${appUrl}/auth/callback?token=${access_token}`);
   }
 
   // Step 1: exchange a JWT for a short-lived connect token
@@ -73,7 +75,8 @@ export class AuthController {
     @Query('state') state: string,
     @Res() res: any,
   ) {
-    const frontendUrl = this.config.get('FRONTEND_URL', 'http://localhost:5173');
+    // Redirects target /admin/calendars, which only exists on the admin origin
+    const frontendUrl = this.config.get('APP_URL') || this.config.get('FRONTEND_URL', 'http://localhost:5173');
 
     let payload: any;
     try {
