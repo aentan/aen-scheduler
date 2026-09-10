@@ -16,7 +16,11 @@ primary_region = "sin"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1
+  # Scale to zero when idle. The machine cold-starts on the next HTTP request
+  # (~1-2s). Scheduled jobs (reminders, Google token refresh) are driven by an
+  # external ping to /api/internal/cron/* — see .github/workflows/cron.yml —
+  # since the in-process @Cron does not fire while the machine is stopped.
+  min_machines_running = 0
 
   [[http_service.checks]]
     grace_period = "10s"
@@ -26,6 +30,6 @@ primary_region = "sin"
     timeout = "5s"
 
 [[vm]]
-  memory = "512mb"
+  memory = "256mb"
   cpu_kind = "shared"
   cpus = 1

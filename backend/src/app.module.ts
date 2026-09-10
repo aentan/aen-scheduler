@@ -13,6 +13,7 @@ import { AvailabilityModule } from './availability/availability.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { EmailModule } from './email/email.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { CronModule } from './cron/cron.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { RemindersModule } from './reminders/reminders.module';
     BookingsModule,
     EmailModule,
     RemindersModule,
+    CronModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

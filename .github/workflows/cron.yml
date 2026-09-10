@@ -1,0 +1,43 @@
+name: scheduler-cron
+
+# Drives the app's scheduled jobs from outside Fly so the machine can scale to
+# zero (min_machines_running=0). Each ping wakes the machine, runs the job, and
+# lets it sleep again. Requires a repo secret CRON_SECRET matching the app's.
+#
+# Note: GitHub-hosted cron can be delayed under load and is auto-disabled after
+# ~60 days of no repo activity. The reminder match window (REMINDER_WINDOW_MINUTES)
+# is set to absorb the expected 15-min jitter; if you need punctual reminders,
+# use a dedicated pinger (e.g. cron-job.org) hitting the same endpoints instead.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # reminders
+    - cron: '0 */6 * * *' # Google token refresh
+  workflow_dispatch: {} # manual trigger for testing
+
+concurrency:
+  group: scheduler-cron
+  cancel-in-progress: false
+
+jobs:
+  reminders:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/15 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping reminders
+        run: |
+          curl -fsS -X POST \
+            --retry 4 --retry-delay 5 --retry-all-errors --max-time 60 \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            https://aen-scheduler.fly.dev/api/internal/cron/reminders
+
+  refresh-tokens:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 */6 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping token refresh
+        run: |
+          curl -fsS -X POST \
+            --retry 4 --retry-delay 5 --retry-all-errors --max-time 60 \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            https://aen-scheduler.fly.dev/api/internal/cron/refresh-tokens

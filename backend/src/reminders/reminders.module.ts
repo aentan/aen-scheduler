@@ -6,5 +6,6 @@ import { EmailModule } from '../email/email.module';
 @Module({
   imports: [PrismaModule, EmailModule],
   providers: [RemindersService],
+  exports: [RemindersService],
 })
 export class RemindersModule {}
