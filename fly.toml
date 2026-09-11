@@ -4,6 +4,11 @@ primary_region = "sin"
 [build]
   dockerfile = "Dockerfile"
 
+# Run migrations once per deploy in a throwaway machine, not on every boot.
+# This keeps scale-to-zero cold starts fast (see Dockerfile CMD).
+[deploy]
+  release_command = "./node_modules/.bin/prisma migrate deploy"
+
 [build.args]
   VITE_APP_HOST = "aen-scheduler.fly.dev"
 

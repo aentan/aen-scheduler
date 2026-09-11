@@ -40,4 +40,7 @@ COPY --from=frontend-build /app/frontend/dist ./public
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+# Migrations run via fly.toml [deploy] release_command (once per deploy), NOT on
+# every machine boot — otherwise a scale-to-zero cold start pays ~25s to run
+# `migrate deploy` just to find nothing pending. Keep the runtime CMD minimal.
+CMD ["node", "dist/main.js"]
