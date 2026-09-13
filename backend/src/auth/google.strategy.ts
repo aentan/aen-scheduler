@@ -21,7 +21,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         'https://www.googleapis.com/auth/calendar.events',
       ],
       accessType: 'offline',
-      prompt: 'consent',
+      // Only the *first* authorization needs the consent screen to mint a
+      // refresh token; forcing consent on every login churns refresh tokens
+      // (toward Google's 50-per-user cap) and can invalidate a working one.
+      // Routine logins just pick the account and reuse the stored refresh
+      // token; the "connect"/reconnect flow still forces consent when a fresh
+      // token is actually required.
+      prompt: 'select_account',
     });
   }
 

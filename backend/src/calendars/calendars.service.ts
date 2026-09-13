@@ -1,10 +1,20 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
-import { google } from 'googleapis';
+import { EmailService } from '../email/email.service';
+// Dedicated API packages instead of the umbrella `googleapis` — the umbrella
+// eagerly loads metadata for every Google API (~10x slower to require), which
+// hurts scale-to-zero cold starts.
+import { calendar as googleCalendar, auth as googleAuth } from '@googleapis/calendar';
 
 @Injectable()
 export class CalendarsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(CalendarsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,
+  ) {}
 
   private getOAuthClient(account: {
     id: string;
@@ -12,7 +22,7 @@ export class CalendarsService {
     refreshToken: string;
     tokenExpiry: Date;
   }) {
-    const oauth2Client = new google.auth.OAuth2(
+    const oauth2Client = new googleAuth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_CALLBACK_URL,
@@ -22,7 +32,9 @@ export class CalendarsService {
       refresh_token: account.refreshToken || undefined,
       expiry_date: account.tokenExpiry?.getTime(),
     });
-    // Persist refreshed tokens so we don't depend on the user re-logging in
+    // Persist refreshed tokens so we don't depend on the user re-logging in.
+    // A successful refresh also means the account is healthy again, so clear
+    // any stale re-auth flag.
     oauth2Client.on('tokens', (tokens) => {
       if (!tokens.access_token) return;
       this.prisma.googleAccount
@@ -31,12 +43,103 @@ export class CalendarsService {
           data: {
             accessToken: tokens.access_token,
             tokenExpiry: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
+            needsReauth: false,
             ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
           },
         })
         .catch((err) => console.error('Failed to persist refreshed Google tokens:', err.message));
     });
     return oauth2Client;
+  }
+
+  /**
+   * A failed OAuth *refresh* (revoked/expired refresh token, e.g. Google's
+   * `invalid_grant`) is unrecoverable without the owner re-consenting. Detect
+   * it so we can flag the account instead of silently failing every call.
+   */
+  private isAuthError(err: any): boolean {
+    const code = err?.response?.data?.error || err?.code;
+    return (
+      code === 'invalid_grant' ||
+      code === 'unauthorized_client' ||
+      code === 'invalid_client' ||
+      err?.response?.status === 401 ||
+      /invalid_grant/.test(err?.message || '')
+    );
+  }
+
+  private async flagReauth(accountId: string) {
+    await this.prisma.googleAccount
+      .update({ where: { id: accountId }, data: { needsReauth: true } })
+      .catch((err) => console.error('Failed to flag account for re-auth:', err.message));
+  }
+
+  /**
+   * Keep every Google connection warm. Refreshing on a schedule (rather than
+   * lazily at booking time) means a token is always fresh before it's needed,
+   * exercises the credential so it never lapses from inactivity, and surfaces a
+   * revoked/expired grant as an email alert instead of a failed booking.
+   */
+  @Cron(CronExpression.EVERY_6_HOURS)
+  async refreshTokens() {
+    const accounts = await this.prisma.googleAccount.findMany({
+      include: { user: { select: { email: true } } },
+    });
+    for (const account of accounts) {
+      await this.refreshAndCheck(account);
+    }
+  }
+
+  private async refreshAndCheck(account: {
+    id: string;
+    email: string;
+    accessToken: string;
+    refreshToken: string;
+    tokenExpiry: Date;
+    needsReauth: boolean;
+    user: { email: string };
+  }) {
+    if (!account.refreshToken) {
+      await this.markUnhealthy(account, 'no refresh token stored');
+      return;
+    }
+
+    const auth = this.getOAuthClient(account);
+    // Drop the cached access token so getAccessToken() always performs a real
+    // refresh — that's what proves the refresh token is still valid. On success
+    // the 'tokens' listener persists the new token and clears needsReauth.
+    auth.setCredentials({ refresh_token: account.refreshToken });
+
+    try {
+      await auth.getAccessToken();
+      if (account.needsReauth) {
+        await this.prisma.googleAccount
+          .update({ where: { id: account.id }, data: { needsReauth: false } })
+          .catch(() => {});
+        this.logger.log(`Re-auth cleared for ${account.email} (token refreshed).`);
+      }
+    } catch (err) {
+      // Transient/network errors: leave state untouched and retry next run.
+      if (this.isAuthError(err)) {
+        await this.markUnhealthy(account, err.message);
+      } else {
+        this.logger.warn(`Token refresh error for ${account.email} (will retry): ${err.message}`);
+      }
+    }
+  }
+
+  private async markUnhealthy(
+    account: { id: string; email: string; needsReauth: boolean; user: { email: string } },
+    reason: string,
+  ) {
+    const wasHealthy = !account.needsReauth;
+    await this.flagReauth(account.id);
+    if (wasHealthy) {
+      this.logger.warn(`Flagged ${account.email} for re-auth: ${reason}`);
+      await this.emailService
+        .sendReconnectNeeded(account.user.email, { email: account.email })
+        .catch((e) => this.logger.error(`Reconnect alert email failed: ${e.message}`));
+    }
   }
 
   private async getOAuthClientForCalendar(userId: string, googleCalendarId: string) {
@@ -51,8 +154,10 @@ export class CalendarsService {
   async syncCalendars(userId: string) {
     const accounts = await this.prisma.googleAccount.findMany({ where: { userId } });
     if (accounts.length === 0) throw new NotFoundException('No Google accounts connected');
-    const results = await Promise.all(accounts.map((a) => this.syncAccount(userId, a)));
-    return results.flat();
+    // One broken account (e.g. revoked refresh token) shouldn't stop the others
+    // from syncing; syncAccount flags such accounts for re-auth.
+    const settled = await Promise.allSettled(accounts.map((a) => this.syncAccount(userId, a)));
+    return settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   }
 
   async syncAccountByGoogleId(userId: string, googleId: string) {
@@ -68,10 +173,16 @@ export class CalendarsService {
     account: { id: string; accessToken: string; refreshToken: string; tokenExpiry: Date },
   ) {
     const auth = this.getOAuthClient(account);
-    const calendar = google.calendar({ version: 'v3', auth });
+    const calendar = googleCalendar({ version: 'v3', auth });
 
-    const response = await calendar.calendarList.list({ minAccessRole: 'writer' });
-    const items = response.data.items || [];
+    let items: any[];
+    try {
+      const response = await calendar.calendarList.list({ minAccessRole: 'writer' });
+      items = response.data.items || [];
+    } catch (err) {
+      if (this.isAuthError(err)) await this.flagReauth(account.id);
+      throw err;
+    }
 
     const results = await Promise.all(
       items.map(async (cal) => {
@@ -138,6 +249,7 @@ export class CalendarsService {
         name: true,
         picture: true,
         isPrimary: true,
+        needsReauth: true,
         createdAt: true,
         connectedCalendars: { where: { isActive: true }, select: { id: true, name: true } },
       },
@@ -176,7 +288,11 @@ export class CalendarsService {
         if (calIds.length === 0) return;
 
         const auth = this.getOAuthClient(account);
-        const calendar = google.calendar({ version: 'v3', auth });
+        const calendar = googleCalendar({ version: 'v3', auth });
+
+        // Fail closed: if we can't confirm a calendar is free, treat the whole
+        // window as busy so a broken credential can't cause a double-booking.
+        const blockWholeWindow = { start: timeMin.toISOString(), end: timeMax.toISOString() };
 
         try {
           const response = await calendar.freebusy.query({
@@ -188,10 +304,17 @@ export class CalendarsService {
           });
 
           for (const [calId, data] of Object.entries(response.data.calendars || {})) {
-            allBusy[calId] = (data.busy || []).map((b) => ({ start: b.start, end: b.end }));
+            // Google can report per-calendar errors while the overall request
+            // succeeds (access lost, calendar gone). Block those too.
+            allBusy[calId] =
+              data.errors && data.errors.length > 0
+                ? [blockWholeWindow]
+                : (data.busy || []).map((b) => ({ start: b.start, end: b.end }));
           }
         } catch (err) {
           console.error(`FreeBusy error for account ${account.email}:`, err.message);
+          if (this.isAuthError(err)) await this.flagReauth(account.id);
+          for (const id of calIds) allBusy[id] = [blockWholeWindow];
         }
       }),
     );
@@ -214,13 +337,17 @@ export class CalendarsService {
   ) {
     const connected = await this.prisma.connectedCalendar.findFirst({
       where: { userId, googleCalendarId: calendarId, isActive: true },
+      include: { googleAccount: true },
     });
     if (!connected || connected.accessLevel === 'reader') {
       throw new BadRequestException('Cannot write to this calendar');
     }
+    if (!connected.googleAccount) {
+      throw new NotFoundException(`No account found for calendar ${calendarId}`);
+    }
 
-    const auth = await this.getOAuthClientForCalendar(userId, calendarId);
-    const calendar = google.calendar({ version: 'v3', auth });
+    const auth = this.getOAuthClient(connected.googleAccount);
+    const calendar = googleCalendar({ version: 'v3', auth });
 
     const eventBody: any = {
       summary: event.summary,
@@ -236,14 +363,19 @@ export class CalendarsService {
       };
     }
 
-    const response = await calendar.events.insert({
-      calendarId,
-      requestBody: eventBody,
-      conferenceDataVersion: event.conferenceType === 'google_meet' ? 1 : 0,
-      sendUpdates: 'all',
-    });
+    try {
+      const response = await calendar.events.insert({
+        calendarId,
+        requestBody: eventBody,
+        conferenceDataVersion: event.conferenceType === 'google_meet' ? 1 : 0,
+        sendUpdates: 'all',
+      });
 
-    return response.data;
+      return response.data;
+    } catch (err) {
+      if (this.isAuthError(err)) await this.flagReauth(connected.googleAccountId);
+      throw err;
+    }
   }
 
   async deleteEvent(userId: string, calendarId: string, eventId: string) {
@@ -253,7 +385,7 @@ export class CalendarsService {
     } catch {
       return;
     }
-    const calendar = google.calendar({ version: 'v3', auth });
+    const calendar = googleCalendar({ version: 'v3', auth });
     try {
       await calendar.events.delete({ calendarId, eventId, sendUpdates: 'all' });
     } catch (err) {

@@ -26,7 +26,7 @@ export class AuthService {
 
     await this.prisma.googleAccount.upsert({
       where: { userId_googleId: { userId: user.id, googleId } },
-      update: { accessToken, refreshToken: refreshToken || undefined, tokenExpiry, name: displayName, picture },
+      update: { accessToken, refreshToken: refreshToken || undefined, tokenExpiry, name: displayName, picture, needsReauth: false },
       create: {
         userId: user.id,
         googleId,
@@ -50,7 +50,7 @@ export class AuthService {
 
     await this.prisma.googleAccount.upsert({
       where: { userId_googleId: { userId, googleId } },
-      update: { accessToken, refreshToken: refreshToken || undefined, tokenExpiry, name: displayName, picture },
+      update: { accessToken, refreshToken: refreshToken || undefined, tokenExpiry, name: displayName, picture, needsReauth: false },
       create: {
         userId,
         googleId,

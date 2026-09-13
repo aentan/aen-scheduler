@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { LegalFooter } from '../components/shared/LegalFooter';
 
 export function LoginPage() {
   const { user, loading, login } = useAuth();
@@ -8,7 +9,7 @@ export function LoginPage() {
   if (user) return <Navigate to="/admin" replace />;
 
   return (
-    <div className="min-h-screen bg-graph-paper flex items-center justify-center p-4">
+    <div className="min-h-screen bg-graph-paper flex flex-col items-center justify-center p-4 gap-8">
       <div className="bg-white border border-black p-10 w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8">
@@ -38,6 +39,7 @@ export function LoginPage() {
           Google Calendar access is requested to manage your bookings.
         </p>
       </div>
+      <LegalFooter />
     </div>
   );
 }

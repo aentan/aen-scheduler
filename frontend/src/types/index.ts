@@ -23,6 +23,7 @@ export interface GoogleAccount {
   name: string;
   picture?: string;
   isPrimary: boolean;
+  needsReauth: boolean;
   createdAt: string;
   connectedCalendars: { id: string; name: string }[];
 }

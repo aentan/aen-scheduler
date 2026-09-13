@@ -3,7 +3,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
-import { google } from 'googleapis';
+// Dedicated package instead of the umbrella `googleapis` (see calendars.service).
+import { oauth2 as googleOauth2, auth as googleAuth } from '@googleapis/oauth2';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CalendarsService } from '../calendars/calendars.service';
@@ -89,7 +90,7 @@ export class AuthController {
     }
 
     const connectCallbackUrl = this.config.get('GOOGLE_CONNECT_CALLBACK_URL');
-    const oauth2Client = new google.auth.OAuth2(
+    const oauth2Client = new googleAuth.OAuth2(
       this.config.get('GOOGLE_CLIENT_ID'),
       this.config.get('GOOGLE_CLIENT_SECRET'),
       connectCallbackUrl,
@@ -99,7 +100,7 @@ export class AuthController {
       const { tokens } = await oauth2Client.getToken(code);
       oauth2Client.setCredentials(tokens);
 
-      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const oauth2 = googleOauth2({ version: 'v2', auth: oauth2Client });
       const { data: googleProfile } = await oauth2.userinfo.get();
 
       await this.authService.connectGoogleAccount(payload.userId, {

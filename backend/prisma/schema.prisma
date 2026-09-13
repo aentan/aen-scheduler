@@ -47,6 +47,7 @@ model GoogleAccount {
   refreshToken String   @db.Text
   tokenExpiry  DateTime
   isPrimary    Boolean  @default(false)
+  needsReauth  Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

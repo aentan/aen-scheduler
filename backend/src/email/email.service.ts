@@ -87,6 +87,23 @@ ${booking.meetingLink ? `<p><strong>Join:</strong> <a href="${booking.meetingLin
     );
   }
 
+  async sendReconnectNeeded(to: string, account: { email: string }) {
+    const baseUrl = process.env.FRONTEND_URL ?? '';
+
+    await this.send(
+      to,
+      `⚠️ Action needed: reconnect your Google account (${account.email})`,
+      `<h2>⚠️ A calendar connection needs reconnecting</h2>
+<p>Your Google account <strong>${account.email}</strong> has lost access — its authorization expired or was revoked, and it can no longer be refreshed automatically.</p>
+<p>Until you reconnect it:</p>
+<ul>
+  <li>New bookings that target its calendars will fail to sync.</li>
+  <li>To avoid double-bookings, its calendars are treated as fully busy, which can hide your availability.</li>
+</ul>
+<p><a href="${baseUrl}/admin/calendars">Reconnect it in Settings → Calendars</a></p>`,
+    );
+  }
+
   async sendCancellationNotice(booking: any) {
     const dateStr = format(booking.startTime, 'MMMM d yyyy');
 

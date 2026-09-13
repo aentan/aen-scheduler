@@ -80,6 +80,7 @@ export function CalendarsPage() {
   );
   const hasWritable = writableCalendars.length > 0;
   const isLoading = calendarsLoading || accountsLoading;
+  const reauthAccounts = googleAccounts.filter((a) => a.needsReauth);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
@@ -100,6 +101,23 @@ export function CalendarsPage() {
           {syncMutation.isPending ? 'Syncing…' : 'Sync All'}
         </button>
       </div>
+
+      {/* Re-auth warning */}
+      {reauthAccounts.length > 0 && (
+        <div className="flex items-start gap-3 border border-[#ff0000] px-4 py-3">
+          <i className="hn hn-exclamation-triangle flex-shrink-0 mt-0.5 text-[#ff0000]" style={{ fontSize: 14 }} />
+          <div className="flex-1">
+            <p className="font-mono font-bold text-sm text-[#ff0000]">
+              {reauthAccounts.length === 1 ? 'A Google account needs reconnecting' : 'Google accounts need reconnecting'}
+            </p>
+            <p className="font-mono text-sm text-emphasis-2 mt-0.5">
+              {reauthAccounts.map((a) => a.email).join(', ')} lost access (token expired or revoked). Bookings to
+              {reauthAccounts.length === 1 ? ' its' : ' their'} calendars are failing, and to avoid double-bookings
+              those calendars are being treated as fully busy until reconnected.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Google Accounts */}
       <section>
@@ -140,21 +158,37 @@ export function CalendarsPage() {
                           Primary
                         </span>
                       )}
+                      {account.needsReauth && (
+                        <span className="font-mono text-sm border border-[#ff0000] px-2 py-0.5 uppercase tracking-wide text-[#ff0000]">
+                          Needs reconnect
+                        </span>
+                      )}
                     </div>
                     <p className="font-mono text-sm text-ink mt-0.5">{account.email}</p>
                     <p className="font-mono text-sm text-ink">
                       {account.connectedCalendars.length} calendar{account.connectedCalendars.length !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  {!account.isPrimary && (
-                    <button
-                      onClick={() => disconnectAccountMutation.mutate(account.id)}
-                      disabled={disconnectAccountMutation.isPending}
-                      className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#ff0000] font-mono text-sm text-[#ff0000] hover:bg-[#ff0000] hover:text-white transition-colors disabled:opacity-50"
-                    >
-                      <i className="hn hn-trash" style={{ fontSize: 14 }} /> Remove
-                    </button>
-                  )}
+                  <div className="flex-shrink-0 flex items-center gap-2">
+                    {account.needsReauth && (
+                      <button
+                        onClick={() => connectAccountMutation.mutate()}
+                        disabled={connectAccountMutation.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#ff0000] text-white font-mono text-sm font-bold border border-[#ff0000] hover:bg-paper hover:text-[#ff0000] transition-colors disabled:opacity-50"
+                      >
+                        <i className="hn hn-refresh" style={{ fontSize: 14 }} /> Reconnect
+                      </button>
+                    )}
+                    {!account.isPrimary && (
+                      <button
+                        onClick={() => disconnectAccountMutation.mutate(account.id)}
+                        disabled={disconnectAccountMutation.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#ff0000] font-mono text-sm text-[#ff0000] hover:bg-[#ff0000] hover:text-white transition-colors disabled:opacity-50"
+                      >
+                        <i className="hn hn-trash" style={{ fontSize: 14 }} /> Remove
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

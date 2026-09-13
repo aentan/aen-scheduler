@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Clock } from 'lucide-react';
 import { slotTypesApi } from '../api/client';
 import { LoadingSpinner } from '../components/shared/LoadingSpinner';
+import { LegalFooter } from '../components/shared/LegalFooter';
 import aenismLogo from '../assets/aenism-logo.svg';
 
 interface PublicSlotType {
@@ -157,6 +158,7 @@ export function BookingLandingPage() {
         <p className="font-mono text-sm text-emphasis-4 mt-10 text-center uppercase tracking-widest">
           Powered by AEN Scheduler
         </p>
+        <LegalFooter className="mt-4" />
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import { BookingLandingPage } from './pages/BookingLandingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { CancelBookingPage } from './pages/CancelBookingPage';
 import { RescheduleBookingPage } from './pages/RescheduleBookingPage';
+import { PrivacyPage, TermsPage } from './pages/LegalPages';
 
 const APP_HOST = import.meta.env.VITE_APP_HOST || 'localhost';
 
@@ -75,6 +76,8 @@ function AppRoutes() {
       <Routes>
         <Route path="/cancel/:token" element={<CancelBookingPage />} />
         <Route path="/reschedule/:token" element={<RescheduleBookingPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/" element={<BookingLandingPage />} />
         <Route path="/:slotSlug" element={<CustomDomainBookingPage />} />
       </Routes>
@@ -85,6 +88,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="/cancel/:token" element={<CancelBookingPage />} />
       <Route path="/reschedule/:token" element={<RescheduleBookingPage />} />
       <Route path="/book/:slug" element={<BookingLandingPage />} />
