@@ -28,7 +28,10 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       // token; the "connect"/reconnect flow still forces consent when a fresh
       // token is actually required.
       prompt: 'select_account',
-    });
+      // `accessType`/`prompt` are Google-specific options passport-google-oauth20
+      // forwards at runtime but doesn't declare in its TS types; @nestjs/passport
+      // v11 tightened the strategy constructor signature, so cast past the gap.
+    } as any);
   }
 
   async validate(
